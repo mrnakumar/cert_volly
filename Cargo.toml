@@ -1,0 +1,10 @@
+[package]
+name = "cert_volly"
+version = "0.1.0"
+authors = ["Narendra Kumar <nknkchoudhary@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+openssl = "0.10"
+chrono = "0.4"
+

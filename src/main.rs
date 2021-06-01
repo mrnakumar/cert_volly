@@ -1,13 +1,25 @@
 use chrono::Utc;
 use openssl::asn1::Asn1Time;
-use openssl::ssl::{SslConnector, SslMethod};
+use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
+use std::env;
+use std::io::{Error, ErrorKind};
 use std::net::TcpStream;
+
 fn main() -> std::io::Result<()> {
-    let tcp_stream = TcpStream::connect("mrnakumar.com:443")?;
-    let ctx = SslConnector::builder(SslMethod::tls()).unwrap();
-    //ctx.set_verify(SslVerifyMode::NONE);
+    let arguments: Vec<String> = env::args().skip(1).collect();
+    if arguments.len() != 2 {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "USAGES: <domain> <SSL port>",
+        ));
+    }
+    let domain = &arguments[0];
+    let port = &arguments[1];
+    let tcp_stream = TcpStream::connect(format!("{}:{}", domain, port))?;
+    let mut ctx = SslConnector::builder(SslMethod::tls()).unwrap();
+    ctx.set_verify(SslVerifyMode::NONE);
     let ctx = ctx.build();
-    let mut stream = ctx.connect("mrnakumar.com", &tcp_stream).unwrap();
+    let mut stream = ctx.connect(domain, &tcp_stream).unwrap();
     match stream.ssl().peer_certificate() {
         Some(c) => {
             let na = c.not_after();

@@ -3,11 +3,11 @@ use openssl::asn1::Asn1Time;
 use openssl::ssl::{SslConnector, SslMethod};
 use std::net::TcpStream;
 fn main() -> std::io::Result<()> {
-    let stream = TcpStream::connect("mrnakumar.com:443")?;
+    let tcp_stream = TcpStream::connect("mrnakumar.com:443")?;
     let ctx = SslConnector::builder(SslMethod::tls()).unwrap();
     //ctx.set_verify(SslVerifyMode::NONE);
     let ctx = ctx.build();
-    let mut stream = ctx.connect("mrnakumar.com", stream).unwrap();
+    let mut stream = ctx.connect("mrnakumar.com", &tcp_stream).unwrap();
     match stream.ssl().peer_certificate() {
         Some(c) => {
             let na = c.not_after();
@@ -22,7 +22,12 @@ fn main() -> std::io::Result<()> {
         None => eprintln!("Peer has no certificate!"),
     }
     match stream.shutdown() {
-        Ok(_) => println!("closed stream"),
+        Ok(sr) => match sr {
+            _ => match stream.shutdown() {
+                Ok(_) => println!("Shutdown finished"),
+                Err(_) => println!("Couldn't shutdown stream"),
+            },
+        },
         Err(_) => eprintln!("failed to shutdown stream"),
     }
     Ok(())

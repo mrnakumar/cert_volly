@@ -1,6 +1,6 @@
 use chrono::Utc;
 use openssl::asn1::Asn1Time;
-use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
+use openssl::ssl::{SslConnector, SslMethod, SslOptions, SslStream, SslVerifyMode};
 use std::env;
 use std::io::{Error, ErrorKind, Result};
 use std::net::TcpStream;
@@ -11,8 +11,14 @@ fn main() -> Result<()> {
             let tcp_stream = TcpStream::connect(format!("{}:{}", domain, port))?;
             let mut ctx = SslConnector::builder(SslMethod::tls()).unwrap();
             ctx.set_verify(SslVerifyMode::NONE);
+            ctx.set_options(SslOptions::from_bits_truncate(0x00000004));
             let ctx = ctx.build();
-            let mut stream = ctx.connect(&domain, &tcp_stream).unwrap();
+            let stream_result = ctx.connect(&domain, &tcp_stream);
+            if let Err(e) = &stream_result {
+                eprintln!("Failed to connect. Is the domain and port correct? {:?}", e);
+                return Err(Error::new(ErrorKind::NotConnected, ""));
+            }
+            let mut stream = stream_result.unwrap();
             match stream.ssl().peer_certificate() {
                 Some(c) => {
                     let na = c.not_after();
@@ -21,7 +27,10 @@ fn main() -> Result<()> {
                     if remaining < 20 {
                         println!("Only {} days left", remaining);
                     } else {
-                        println!("You have got time");
+                        println!(
+                            "The certificate expires in {} days. It is valid till {}",
+                            remaining, na
+                        );
                     }
                 }
                 None => eprintln!("Peer has no certificate!"),

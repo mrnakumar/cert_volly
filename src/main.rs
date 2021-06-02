@@ -1,17 +1,26 @@
 use chrono::Utc;
 use openssl::asn1::Asn1Time;
-use openssl::ssl::{SslConnector, SslMethod, SslOptions, SslStream, SslVerifyMode};
+use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 use std::env;
 use std::io::{Error, ErrorKind, Result};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 fn main() -> Result<()> {
     return match parse_command_line_arguments() {
         Ok(CommandLineArguments { domain, port }) => {
-            let tcp_stream = TcpStream::connect(format!("{}:{}", domain, port))?;
+            let address = format!("{}:{}", domain, port);
+            let address = address.to_socket_addrs();
+            if let Err(_) = address {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    "Invalid IPAddress/Domain",
+                ));
+            };
+            let address = address?.as_slice()[0];
+            let tcp_stream = TcpStream::connect_timeout(&address, Duration::from_secs(60))?;
             let mut ctx = SslConnector::builder(SslMethod::tls()).unwrap();
             ctx.set_verify(SslVerifyMode::NONE);
-            ctx.set_options(SslOptions::from_bits_truncate(0x00000004));
             let ctx = ctx.build();
             let stream_result = ctx.connect(&domain, &tcp_stream);
             if let Err(e) = &stream_result {
@@ -24,13 +33,12 @@ fn main() -> Result<()> {
                     let na = c.not_after();
                     let now = Utc::now().timestamp();
                     let remaining = Asn1Time::from_unix(now).unwrap().diff(na).unwrap().days;
+                    println!(
+                        "The certificate expires in {} days. It is valid till {}",
+                        remaining, na
+                    );
                     if remaining < 20 {
                         println!("Only {} days left", remaining);
-                    } else {
-                        println!(
-                            "The certificate expires in {} days. It is valid till {}",
-                            remaining, na
-                        );
                     }
                 }
                 None => eprintln!("Peer has no certificate!"),
@@ -73,6 +81,6 @@ fn shutdown_ssl(stream: &mut SslStream<&TcpStream>) -> () {
                 Err(_) => println!("Couldn't shutdown stream"),
             },
         },
-        Err(_) => eprintln!("failed to shutdown stream"),
+        Err(_) => eprintln!("Failed to shutdown stream"),
     }
 }
